@@ -1,0 +1,77 @@
+# 简介
+`sandbox injection-rule create`（别名 `cr`）创建一个新的注入规则。
+
+# 格式
+
+```bash
+qshell sandbox injection-rule create --name <name> --type <openai|anthropic|gemini|qiniu|github|http> [--api-key <apiKey>] [--base-url <baseURL>] [--headers <headers>] [--if-headers <headers>] [--if-queries <queries>]
+qshell sbx ir cr --name <name> --type <openai|anthropic|gemini|qiniu|github|http> [--api-key <apiKey>] [--base-url <baseURL>] [--headers <headers>] [--if-headers <headers>] [--if-queries <queries>]
+```
+
+# 帮助文档
+
+```bash
+$ qshell sandbox injection-rule create -h
+$ qshell sandbox injection-rule create --doc
+```
+
+# 参数
+
+- `--name`：规则名称，必填，同一用户下唯一
+- `--type`：注入类型，必填，支持 `openai`、`anthropic`、`gemini`、`qiniu`、`github`、`http`
+- `--api-key`：`openai`、`anthropic`、`gemini`、`qiniu` 类型使用的 API Key，`github` 类型使用的访问 token；`type=github` 时必填。注意：通过 CLI 传递密钥可能泄露到 Shell 历史或进程列表
+- `--base-url`：覆盖默认目标地址，或 `http` 类型的目标基础 URL；`qiniu` 默认为 `api.qnaigc.com`；`github` 类型未指定时匹配 `github.com` / `api.github.com`，指定时 host 必须为 `github.com` 或 `api.github.com`
+- `--headers`：`http` 类型的请求头，使用逗号分隔的 `key=value` 形式
+- `--if-headers`：请求 Header 匹配条件，使用逗号分隔的 `key=value` 形式；仅当请求中已存在这些 Header 且值精确匹配时才注入
+- `--if-queries`：请求 query 匹配条件，使用逗号分隔的 `key=value` 形式；仅当请求 URL 中已存在这些 query 参数且值精确匹配时才注入
+
+# 示例
+
+创建 OpenAI 注入规则：
+
+```bash
+$ qshell sandbox injection-rule create --name openai-default --type openai --api-key sk-xxx
+```
+
+创建 Anthropic 注入规则并指定代理地址：
+
+```bash
+$ qshell sandbox injection-rule create --name anthropic-proxy --type anthropic --api-key sk-ant --base-url https://anthropic-proxy.example.com
+```
+
+创建自定义 HTTP 注入规则：
+
+```bash
+$ qshell sandbox injection-rule create --name api-auth --type http --base-url https://api.example.com --headers "Authorization=Bearer token123,X-Env=prod"
+```
+
+创建带匹配条件的自定义 HTTP 注入规则：
+
+```bash
+$ qshell sandbox injection-rule create --name api-auth-scoped --type http --base-url https://api.example.com --headers "Authorization=Bearer token123" --if-headers "X-Scope=demo" --if-queries "inject=true"
+```
+
+创建七牛 AI API 注入规则：
+
+```bash
+$ qshell sandbox injection-rule create --name qiniu-ai --type qiniu --api-key ak-xxx
+```
+
+创建 GitHub 凭证注入规则（token 通过 `--api-key` 传入，沙箱内不可见明文）：
+
+```bash
+$ qshell sandbox injection-rule create --name github-default --type github --api-key ghp-xxx
+```
+
+创建仅匹配 GitHub API 仓库路径的 GitHub 凭证注入规则：
+
+```bash
+$ qshell sandbox injection-rule create --name github-api --type github --api-key ghp-xxx --base-url https://api.github.com/repos/qiniu/*
+```
+
+# JSON body 注入
+HTTP 类型支持 `--if-body` 和 `--body`，均使用 JSON 字符串对象，最多 20 个字段。`--if-body` 精确匹配顶层字符串字段；`--body` 覆盖或新增顶层字符串字段，密钥值不从接口返回。
+```shell
+qshell sandbox injection-rule create --name demo --type http --base-url https://api.example.com --if-body '{"model":"demo"}' --body '{"api_key":"secret"}'
+```
+非字符串值、null、数组和其他注入类型会报错。body 中的秘密会出现在命令行历史与进程参数中，请妥善处理。请求需为未压缩、最大 1 MiB 的 application/json。更新时替换整个 injection 配置，需提供完整类型和目标信息。

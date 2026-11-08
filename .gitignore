@@ -1,0 +1,63 @@
+# Compiled Object files, Static and Dynamic libs (Shared Objects)
+*.o
+*.a
+*.so
+*.exe
+*.exe~
+*.dll
+*.dylib
+src/test/
+src/.qshell
+marker.go
+marker_test.go
+build.sh
+build_local.sh
+
+# Folders
+_obj
+_test
+bin
+.DS_Store
+.idea
+.vscode
+.claude/settings.local.json
+.claude/plans/
+
+# Architecture specific extensions/prefixes
+*.cgo1.go
+*.cgo2.c
+*.prof
+_cgo_defun.c
+_cgo_gotypes.go
+_cgo_export.*
+
+*.[568vq]
+[568vq].out
+report.xml
+.qshell
+qshell-*
+_testmain.go
+
+# go test coverage file
+coverage.txt
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+
+.env
+.env.*
+!.env.example
+
+# Dependency directories (remove the comment below to include it)
+# vendor/
+
+# Go workspace file
+go.work
+
+### Go Patch ###
+/vendor/
+/Godeps/
+

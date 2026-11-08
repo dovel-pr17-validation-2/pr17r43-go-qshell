@@ -1,0 +1,51 @@
+# 简介
+`prefop` 命令用来使用 [pfop请求](http://developer.qiniu.com/code/v6/api/dora-api/pfop/pfop.html) 得到的 `PersistentId` 来查询七牛数据处理的状态或结果。
+
+参考文档：[持久化处理状态查询 (prefop)](http://developer.qiniu.com/code/v6/api/dora-api/pfop/prefop.html)
+
+# 格式
+```
+qshell prefop <PersistentId>
+```
+
+# 帮助文档
+可以在命令行输入如下命令获取帮助文档：
+```
+// 简单描述
+$ qshell prefop -h 
+
+// 详细文档（此文档）
+$ qshell prefop --doc
+```
+
+# 鉴权
+需要使用 `qshell account` 或者 `qshell user add` 命令设置鉴权信息 `AccessKey`, `SecretKey` 和 `Name`。
+
+# 参数
+- PersistentId：持久化处理的 Id【必选】
+
+# 选项
+- --bucket: 持久化处理的文件所在的 bucket；公有云可选，私有云当没有配置 api host 时必选。
+
+# 示例
+查询 `z0.58632a1945a2650cfd5fc8b1` 对应的持久化处理结果：
+```
+qshell prefop z0.58632a1945a2650cfd5fc8b1
+```
+
+输出
+```
+Id: z0.58632a1945a2650cfd5fc8b1
+Code: 0
+Desc: The fop was completed successfully
+InputBucket: video
+InputKey: bjsp/c70f228f-5133-a2cc-a811-5dfa5433996f.mp4
+Pipeline: 1380710990.jcsp_bjsp
+Reqid: SX4AAFKzn5IZTJQU
+
+	Cmd:	avthumb/mp4|saveas/dmlkZW86YmpzcC9jNzBmMjI4Zi01MTMzLWEyY2MtYTgxMS01ZGZhNTQzMzk5NmYubXA0
+	Code:	0
+	Desc:	The fop was completed successfully
+	Hash:	lrttDVJrZJYVqV46PgfJojip6Zrn
+	Key:	bjsp/c70f228f-5133-a2cc-a811-5dfa5433996f.mp4
+```

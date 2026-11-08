@@ -1,0 +1,491 @@
+package operations
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/qiniu/go-sdk/v7/sandbox"
+)
+
+func TestBuildSandboxInjections_Empty(t *testing.T) {
+	injections, err := buildSandboxInjections(nil, nil)
+	if err != nil {
+		t.Fatalf("buildSandboxInjections() error = %v", err)
+	}
+	if injections != nil {
+		t.Fatalf("buildSandboxInjections() = %v, want nil", injections)
+	}
+}
+
+func TestBuildSandboxInjections_WithRuleIDs(t *testing.T) {
+	injections, err := buildSandboxInjections([]string{"rule-1", " rule-2 "}, nil)
+	if err != nil {
+		t.Fatalf("buildSandboxInjections() error = %v", err)
+	}
+	if len(injections) != 2 {
+		t.Fatalf("buildSandboxInjections() len = %d, want 2", len(injections))
+	}
+	if injections[0].ByID == nil || *injections[0].ByID != "rule-1" {
+		t.Fatalf("first injection = %+v, want rule-1", injections[0])
+	}
+	if injections[1].ByID == nil || *injections[1].ByID != "rule-2" {
+		t.Fatalf("second injection = %+v, want rule-2", injections[1])
+	}
+}
+
+func TestBuildSandboxInjections_RejectsEmptyRuleID(t *testing.T) {
+	if _, err := buildSandboxInjections([]string{"rule-1", " "}, nil); err == nil {
+		t.Fatal("expected empty injection rule ID to fail")
+	}
+}
+
+func TestBuildSandboxInjections_WithInlineOpenAI(t *testing.T) {
+	injections, err := buildSandboxInjections(nil, []string{"type=openai,api-key=sk-test,base-url=https://api.openai-proxy.example.com"})
+	if err != nil {
+		t.Fatalf("buildSandboxInjections() error = %v", err)
+	}
+	if len(injections) != 1 {
+		t.Fatalf("buildSandboxInjections() len = %d, want 1", len(injections))
+	}
+	if injections[0].OpenAI == nil {
+		t.Fatalf("first injection = %+v, want openai injection", injections[0])
+	}
+	if injections[0].OpenAI.APIKey == nil || *injections[0].OpenAI.APIKey != "sk-test" {
+		t.Fatalf("openai api key = %v, want sk-test", injections[0].OpenAI.APIKey)
+	}
+}
+
+func TestBuildSandboxInjections_WithInlineHTTP(t *testing.T) {
+	injections, err := buildSandboxInjections(nil, []string{"type=http,base-url=https://api.example.com,headers=Authorization=Bearer token;X-Env=prod,if-headers=X-Scope=demo,if-queries=inject=true"})
+	if err != nil {
+		t.Fatalf("buildSandboxInjections() error = %v", err)
+	}
+	if len(injections) != 1 {
+		t.Fatalf("buildSandboxInjections() len = %d, want 1", len(injections))
+	}
+	if injections[0].HTTP == nil {
+		t.Fatalf("first injection = %+v, want http injection", injections[0])
+	}
+	if injections[0].HTTP.Headers == nil || len(*injections[0].HTTP.Headers) != 2 {
+		t.Fatalf("http headers = %v, want 2 headers", injections[0].HTTP.Headers)
+	}
+	if injections[0].HTTP.IfHeaders == nil || (*injections[0].HTTP.IfHeaders)["X-Scope"] != "demo" {
+		t.Fatalf("http if headers = %v, want X-Scope=demo", injections[0].HTTP.IfHeaders)
+	}
+	if injections[0].HTTP.IfQueries == nil || (*injections[0].HTTP.IfQueries)["inject"] != "true" {
+		t.Fatalf("http if queries = %v, want inject=true", injections[0].HTTP.IfQueries)
+	}
+}
+
+func TestBuildSandboxInjections_WithRulesAndInline(t *testing.T) {
+	injections, err := buildSandboxInjections(
+		[]string{"rule-1"},
+		[]string{"type=gemini,api-key=sk-gem"},
+	)
+	if err != nil {
+		t.Fatalf("buildSandboxInjections() error = %v", err)
+	}
+	if len(injections) != 2 {
+		t.Fatalf("buildSandboxInjections() len = %d, want 2", len(injections))
+	}
+	if injections[0].ByID == nil || *injections[0].ByID != "rule-1" {
+		t.Fatalf("first injection = %+v, want by-id rule-1", injections[0])
+	}
+	if injections[1].Gemini == nil {
+		t.Fatalf("second injection = %+v, want gemini injection", injections[1])
+	}
+}
+
+func TestBuildSandboxInjections_RejectsInvalidInlineSpec(t *testing.T) {
+	if _, err := buildSandboxInjections(nil, []string{"api-key=sk-test"}); err == nil {
+		t.Fatal("expected inline injection without type to fail")
+	}
+}
+
+func TestBuildSandboxInjections_RejectsInvalidInlineHTTPURL(t *testing.T) {
+	if _, err := buildSandboxInjections(nil, []string{"type=http,base-url=not-a-url"}); err == nil {
+		t.Fatal("expected inline http injection with invalid URL to fail")
+	}
+}
+
+func TestBuildSandboxInjections_RejectsUnsupportedInlineType(t *testing.T) {
+	if _, err := buildSandboxInjections(nil, []string{"type=unknown"}); err == nil {
+		t.Fatal("expected unsupported inline injection type to fail")
+	}
+}
+
+func TestBuildSandboxInjections_WithInlineQiniu(t *testing.T) {
+	injections, err := buildSandboxInjections(nil, []string{"type=qiniu,api-key=sk-qiniu,base-url=https://api.qnaigc-proxy.example.com"})
+	if err != nil {
+		t.Fatalf("buildSandboxInjections() error = %v", err)
+	}
+	if len(injections) != 1 {
+		t.Fatalf("buildSandboxInjections() len = %d, want 1", len(injections))
+	}
+	if injections[0].Qiniu == nil {
+		t.Fatalf("first injection = %+v, want qiniu injection", injections[0])
+	}
+	if injections[0].Qiniu.APIKey == nil || *injections[0].Qiniu.APIKey != "sk-qiniu" {
+		t.Fatalf("qiniu api key = %v, want sk-qiniu", injections[0].Qiniu.APIKey)
+	}
+}
+
+func TestParseInlineInjectionFields_HeadersOnly(t *testing.T) {
+	fields := parseInlineInjectionFields("headers=Authorization=Bearer token;X-Env=prod")
+	if got := fields["headers"]; got != "Authorization=Bearer token;X-Env=prod" {
+		t.Fatalf("headers = %q, want %q", got, "Authorization=Bearer token;X-Env=prod")
+	}
+}
+
+func TestParseInlineInjectionFields_HeadersWithOtherFields(t *testing.T) {
+	fields := parseInlineInjectionFields("type=http,base-url=https://api.example.com,headers=Authorization=Bearer token;X-Env=prod,if-headers=X-Scope=demo,if-queries=inject=true")
+	if fields["type"] != "http" || fields["base-url"] != "https://api.example.com" {
+		t.Fatalf("fields = %v, want type and base-url parsed", fields)
+	}
+	if got := fields["headers"]; got != "Authorization=Bearer token;X-Env=prod" {
+		t.Fatalf("headers = %q, want %q", got, "Authorization=Bearer token;X-Env=prod")
+	}
+	if got := fields["if-headers"]; got != "X-Scope=demo" {
+		t.Fatalf("if-headers = %q, want %q", got, "X-Scope=demo")
+	}
+	if got := fields["if-queries"]; got != "inject=true" {
+		t.Fatalf("if-queries = %q, want %q", got, "inject=true")
+	}
+}
+
+func TestParseInlineInjectionFields_CommaSeparatedHeadersWithFollowingCondition(t *testing.T) {
+	fields := parseInlineInjectionFields("type=http,base-url=https://api.example.com,headers=Authorization=Bearer token,X-Env=prod,if-headers=X-Scope=demo")
+	if got := fields["headers"]; got != "Authorization=Bearer token,X-Env=prod" {
+		t.Fatalf("headers = %q, want %q", got, "Authorization=Bearer token,X-Env=prod")
+	}
+	if got := fields["if-headers"]; got != "X-Scope=demo" {
+		t.Fatalf("if-headers = %q, want %q", got, "X-Scope=demo")
+	}
+}
+
+func TestParseInlineInjectionFields_UnknownKeyDoesNotPolluteScalarField(t *testing.T) {
+	fields := parseInlineInjectionFields("type=http,unknown=value,base-url=https://api.example.com")
+	if got := fields["type"]; got != "http" {
+		t.Fatalf("type = %q, want %q", got, "http")
+	}
+	if got := fields["base-url"]; got != "https://api.example.com" {
+		t.Fatalf("base-url = %q, want %q", got, "https://api.example.com")
+	}
+	if _, ok := fields["unknown"]; ok {
+		t.Fatalf("unknown field should be ignored, got fields=%v", fields)
+	}
+}
+
+func TestParseInlineInjectionFields_TrailingCommaDoesNotPolluteScalarField(t *testing.T) {
+	fields := parseInlineInjectionFields("type=http,")
+	if got := fields["type"]; got != "http" {
+		t.Fatalf("type = %q, want %q", got, "http")
+	}
+}
+
+func TestParseInlineHeaders_SemicolonSeparated(t *testing.T) {
+	headers := parseInlineHeaders("Authorization=Bearer token;X-Env=prod")
+	if len(headers) != 2 {
+		t.Fatalf("headers = %v, want 2 headers", headers)
+	}
+	if headers["Authorization"] != "Bearer token" || headers["X-Env"] != "prod" {
+		t.Fatalf("headers = %v, want parsed headers", headers)
+	}
+}
+
+func TestParseInlineHeaders_CommaFallback(t *testing.T) {
+	headers := parseInlineHeaders("Authorization=Bearer token,X-Env=prod")
+	if len(headers) != 2 {
+		t.Fatalf("headers = %v, want 2 headers", headers)
+	}
+	if headers["Authorization"] != "Bearer token" || headers["X-Env"] != "prod" {
+		t.Fatalf("headers = %v, want parsed headers", headers)
+	}
+}
+
+// === buildSandboxResources tests ===
+
+func TestBuildSandboxResources_Empty(t *testing.T) {
+	resources, err := buildSandboxResources(nil)
+	if err != nil {
+		t.Fatalf("buildSandboxResources() error = %v", err)
+	}
+	if resources != nil {
+		t.Fatalf("buildSandboxResources() = %v, want nil", resources)
+	}
+}
+
+func TestBuildSandboxResources_GithubRepository(t *testing.T) {
+	resources, err := buildSandboxResources([]string{
+		"type=github_repository,url=https://github.com/owner/repo.git,mount-path=/workspace/repo,token=ghp-xxx",
+	})
+	if err != nil {
+		t.Fatalf("buildSandboxResources() error = %v", err)
+	}
+	if len(resources) != 1 {
+		t.Fatalf("buildSandboxResources() len = %d, want 1", len(resources))
+	}
+	got := resources[0].GitRepository
+	if got == nil {
+		t.Fatalf("resource = %+v, want GitRepository set", resources[0])
+	}
+	if got.Type != sandbox.GitRepositoryTypeGithub {
+		t.Fatalf("type = %q, want %q", got.Type, sandbox.GitRepositoryTypeGithub)
+	}
+	if got.URL != "https://github.com/owner/repo.git" {
+		t.Fatalf("url = %q, want %q", got.URL, "https://github.com/owner/repo.git")
+	}
+	if got.MountPath != "/workspace/repo" {
+		t.Fatalf("mount path = %q, want %q", got.MountPath, "/workspace/repo")
+	}
+	if got.AuthorizationToken == nil || *got.AuthorizationToken != "ghp-xxx" {
+		t.Fatalf("token = %v, want ghp-xxx", got.AuthorizationToken)
+	}
+}
+
+func TestBuildSandboxResources_DefaultsTypeAndAcceptsMountAlias(t *testing.T) {
+	resources, err := buildSandboxResources([]string{
+		"url=https://github.com/owner/repo.git,mount=/workspace/repo,token=ghp-xxx",
+	})
+	if err != nil {
+		t.Fatalf("buildSandboxResources() error = %v", err)
+	}
+	got := resources[0].GitRepository
+	if got == nil {
+		t.Fatal("resource GitRepository = nil, want set when type omitted")
+	}
+	if got.Type != sandbox.GitRepositoryTypeGithub {
+		t.Fatalf("type defaulted = %q, want %q", got.Type, sandbox.GitRepositoryTypeGithub)
+	}
+	if got.MountPath != "/workspace/repo" {
+		t.Fatalf("mount path via mount= alias = %q, want /workspace/repo", got.MountPath)
+	}
+	if got.AuthorizationToken == nil || *got.AuthorizationToken != "ghp-xxx" {
+		t.Fatalf("token = %v, want ghp-xxx", got.AuthorizationToken)
+	}
+}
+
+func TestBuildSandboxResources_Kodo(t *testing.T) {
+	resources, err := buildSandboxResources([]string{
+		"type=kodo,bucket=test-bucket,mount-path=/mnt/kodo,prefix=datasets/,read-only=true",
+	})
+	if err != nil {
+		t.Fatalf("buildSandboxResources() error = %v", err)
+	}
+	if len(resources) != 1 {
+		t.Fatalf("buildSandboxResources() len = %d, want 1", len(resources))
+	}
+	got := resources[0].Kodo
+	if got == nil {
+		t.Fatalf("resource = %+v, want Kodo set", resources[0])
+	}
+	if got.Bucket != "test-bucket" {
+		t.Fatalf("bucket = %q, want test-bucket", got.Bucket)
+	}
+	if got.MountPath != "/mnt/kodo" {
+		t.Fatalf("mount path = %q, want /mnt/kodo", got.MountPath)
+	}
+	if got.Prefix == nil || *got.Prefix != "datasets/" {
+		t.Fatalf("prefix = %v, want datasets/", got.Prefix)
+	}
+	if got.ReadOnly == nil || !*got.ReadOnly {
+		t.Fatalf("read-only = %v, want true", got.ReadOnly)
+	}
+}
+
+func TestBuildSandboxResources_KodoWithInlineCredentials(t *testing.T) {
+	resources, err := buildSandboxResources([]string{
+		"type=kodo,bucket=test-bucket,mount-path=/mnt/kodo,access-key=test-ak,secret-key=test-sk",
+	})
+	if err != nil {
+		t.Fatalf("buildSandboxResources() error = %v", err)
+	}
+	got := resources[0].Kodo
+	if got == nil {
+		t.Fatal("resource Kodo = nil, want set")
+	}
+	if got.AccessKey == nil || *got.AccessKey != "test-ak" {
+		t.Fatalf("access key = %v, want test-ak", got.AccessKey)
+	}
+	if got.SecretKey == nil || *got.SecretKey != "test-sk" {
+		t.Fatalf("secret key = %v, want test-sk", got.SecretKey)
+	}
+}
+
+func TestBuildSandboxResources_KodoAcceptsMountAliasAndReadonlyAlias(t *testing.T) {
+	resources, err := buildSandboxResources([]string{
+		"type=kodo,bucket=test-bucket,mount=/mnt/kodo,readonly=false",
+	})
+	if err != nil {
+		t.Fatalf("buildSandboxResources() error = %v", err)
+	}
+	got := resources[0].Kodo
+	if got == nil {
+		t.Fatal("resource Kodo = nil, want set")
+	}
+	if got.MountPath != "/mnt/kodo" {
+		t.Fatalf("mount path via mount= alias = %q, want /mnt/kodo", got.MountPath)
+	}
+	if got.ReadOnly == nil || *got.ReadOnly {
+		t.Fatalf("readonly alias = %v, want false", got.ReadOnly)
+	}
+}
+
+func TestBuildSandboxResources_RejectsMissingURL(t *testing.T) {
+	if _, err := buildSandboxResources([]string{"type=github_repository,mount-path=/workspace"}); err == nil {
+		t.Fatal("expected missing url to fail")
+	}
+}
+
+func TestBuildSandboxResources_RejectsMissingMountPath(t *testing.T) {
+	if _, err := buildSandboxResources([]string{"type=github_repository,url=https://github.com/owner/repo.git,token=ghp-xxx"}); err == nil {
+		t.Fatal("expected missing mount-path to fail")
+	}
+}
+
+func TestBuildSandboxResources_RejectsMissingToken(t *testing.T) {
+	if _, err := buildSandboxResources([]string{"type=github_repository,url=https://github.com/owner/repo.git,mount-path=/workspace"}); err == nil {
+		t.Fatal("expected missing token to fail")
+	}
+}
+
+func TestBuildSandboxResources_RejectsRelativeMountPath(t *testing.T) {
+	if _, err := buildSandboxResources([]string{"url=https://github.com/owner/repo.git,mount-path=workspace/repo,token=ghp-xxx"}); err == nil {
+		t.Fatal("expected relative mount-path to fail")
+	}
+}
+
+func TestBuildSandboxResources_RejectsKodoMissingBucket(t *testing.T) {
+	if _, err := buildSandboxResources([]string{"type=kodo,mount-path=/mnt/kodo"}); err == nil {
+		t.Fatal("expected missing kodo bucket to fail")
+	}
+}
+
+func TestBuildSandboxResources_RejectsKodoMissingMountPath(t *testing.T) {
+	if _, err := buildSandboxResources([]string{"type=kodo,bucket=test-bucket"}); err == nil {
+		t.Fatal("expected missing kodo mount-path to fail")
+	}
+}
+
+func TestBuildSandboxResources_RejectsKodoInvalidReadOnly(t *testing.T) {
+	if _, err := buildSandboxResources([]string{"type=kodo,bucket=test-bucket,mount-path=/mnt/kodo,read-only=maybe"}); err == nil {
+		t.Fatal("expected invalid kodo read-only to fail")
+	}
+}
+
+func TestBuildSandboxResources_RejectsIncompleteKodoCredentials(t *testing.T) {
+	if _, err := buildSandboxResources([]string{
+		"type=kodo,bucket=test-bucket,mount-path=/mnt/kodo,access-key=test-ak",
+	}); err == nil {
+		t.Fatal("expected incomplete kodo credentials to fail")
+	}
+}
+
+func TestBuildSandboxResources_RejectsEmptyKodoCredentials(t *testing.T) {
+	if _, err := buildSandboxResources([]string{
+		"type=kodo,bucket=test-bucket,mount-path=/mnt/kodo,access-key=,secret-key=",
+	}); err == nil {
+		t.Fatal("expected empty kodo credentials to fail")
+	}
+}
+
+func TestParseSandboxResource_RedactsCredentialsFromErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		spec    string
+		secrets []string
+	}{
+		{
+			name:    "kodo credentials",
+			spec:    "type=kodo,bucket=test-bucket,mount-path=/mnt/kodo,access-key=ak-secret,secret-key=sk-secret,read-only=invalid",
+			secrets: []string{"ak-secret", "sk-secret"},
+		},
+		{
+			name:    "git token",
+			spec:    "type=github_repository,url=https://github.com/qiniu/qshell.git,mount-path=relative,token=ghp-secret",
+			secrets: []string{"ghp-secret"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseSandboxResource(tt.spec)
+			if err == nil {
+				t.Fatal("expected invalid resource spec to fail")
+			}
+			for _, secret := range tt.secrets {
+				if strings.Contains(err.Error(), secret) {
+					t.Fatalf("error exposed credential: %v", err)
+				}
+			}
+			if !strings.Contains(err.Error(), "<redacted>") {
+				t.Fatalf("error did not show redaction marker: %v", err)
+			}
+		})
+	}
+}
+
+func TestBuildSandboxResources_RejectsConflictingReadOnlyAliases(t *testing.T) {
+	if _, err := buildSandboxResources([]string{"type=kodo,bucket=test-bucket,mount-path=/mnt/kodo,read-only=true,readonly=false"}); err == nil {
+		t.Fatal("expected conflicting read-only aliases to fail")
+	}
+}
+
+func TestBuildSandboxResources_RejectsUnsupportedType(t *testing.T) {
+	if _, err := buildSandboxResources([]string{"type=gitlab_repository,url=https://gitlab.com/owner/repo.git,mount-path=/workspace,token=ghp-xxx"}); err == nil {
+		t.Fatal("expected unsupported resource type to fail")
+	}
+}
+
+func TestBuildSandboxResources_Multiple(t *testing.T) {
+	resources, err := buildSandboxResources([]string{
+		"url=https://github.com/owner/a.git,mount-path=/workspace/a,token=ghp-shared",
+		"url=https://github.com/owner/b.git,mount-path=/workspace/b,token=ghp-shared",
+	})
+	if err != nil {
+		t.Fatalf("buildSandboxResources() error = %v", err)
+	}
+	if len(resources) != 2 {
+		t.Fatalf("buildSandboxResources() len = %d, want 2", len(resources))
+	}
+}
+
+func TestBuildSandboxResources_AllowsDifferentGithubTokens(t *testing.T) {
+	resources, err := buildSandboxResources([]string{
+		"url=https://github.com/owner/a.git,mount-path=/workspace/a,token=ghp-A",
+		"url=https://github.com/owner/b.git,mount-path=/workspace/b,token=ghp-B",
+	})
+	if err != nil {
+		t.Fatalf("buildSandboxResources() error = %v, want no error", err)
+	}
+	if len(resources) != 2 {
+		t.Fatalf("buildSandboxResources() len = %d, want 2", len(resources))
+	}
+	if got := *resources[0].GitRepository.AuthorizationToken; got != "ghp-A" {
+		t.Errorf("first resource token = %q, want ghp-A", got)
+	}
+	if got := *resources[1].GitRepository.AuthorizationToken; got != "ghp-B" {
+		t.Errorf("second resource token = %q, want ghp-B", got)
+	}
+}
+
+func TestBuildSandboxResources_RejectsConflictingMountAliases(t *testing.T) {
+	// 同时给出 mount-path 与 mount 且不一致时，不能静默丢弃任意一项
+	if _, err := buildSandboxResources([]string{
+		"url=https://github.com/owner/a.git,mount-path=/workspace/a,mount=/workspace/b,token=ghp",
+	}); err == nil {
+		t.Fatal("expected conflicting mount-path and mount aliases to fail")
+	}
+}
+
+func TestBuildSandboxResources_AcceptsAgreeingMountAliases(t *testing.T) {
+	// 两个别名取值相同时视为冗余，仍接受
+	resources, err := buildSandboxResources([]string{
+		"url=https://github.com/owner/a.git,mount-path=/workspace/a,mount=/workspace/a,token=ghp",
+	})
+	if err != nil {
+		t.Fatalf("buildSandboxResources() error = %v", err)
+	}
+	if got := resources[0].GitRepository.MountPath; got != "/workspace/a" {
+		t.Fatalf("mount path = %q, want /workspace/a", got)
+	}
+}

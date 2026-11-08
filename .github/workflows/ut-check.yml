@@ -1,0 +1,22 @@
+name: ut-check
+on: [push, pull_request]
+jobs:
+  run:
+    name: go test
+    strategy:
+      matrix:
+        go-version: [1.24.x]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go-version }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Check format
+        run: if [ "$(gofmt -s -l . | wc -l)" -gt 0 ]; then exit 1; fi
+      - name: Go test
+        run: |
+          go test -coverprofile=coverage.txt ./...
+          bash <(curl -s https://codecov.io/bash)

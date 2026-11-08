@@ -1,0 +1,68 @@
+# 简介
+`awsfetch` 迁移亚马逊存储空间的数据到七牛存储空间。 该命令需要用到亚马逊账户的 AccessKeyID 和 SecretKey, 创建访问密钥可以参考：[创建密钥](https://docs.aws.amazon.com/zh_cn/general/latest/gr/managing-aws-access-keys.html)。
+
+该命令使用了七牛的 fetch 接口进行抓取， 需要可以直接访问的网络资源链接， 因此需要亚马逊存储开启公共可访问, 公共可访问开启参考: [文档](https://aws.amazon.com/cn/premiumsupport/knowledge-center/read-access-objects-s3-bucket/)。
+
+因为该命令使用了七牛 fetch 接口，对于较大的资源(大于 100M), 有抓取超时的可能性。
+
+该命令首先使用亚马逊的 List Objects V2 接口[文档](https://docs.aws.amazon.com/AmazonS3/latest/API/v2-RESTBucketGET.html) 获取空间中的文件， 然后使用七牛的 fetch 接口[文档](https://developer.qiniu.com/kodo/api/1263/fetch)进行抓取。
+
+# 格式
+```
+qshell awsfetch [-p <Prefix>][-n <maxKeys>][-m <ContinuationToken>][-c <threadCount>][-u <QiniuUpHost>] -S <AwsSecretKey> -A <AwsID> [-s <SuccessList>][-e <FailureList>] <AwsBucket> <AwsRegion> <QiniuBucket>
+```
+
+# 帮助文档
+可以在命令行输入如下命令获取帮助文档：
+```
+// 简单描述
+$ qshell awsfetch -h 
+
+// 详细文档（此文档）
+$ qshell awsfetch --doc
+```
+
+# 鉴权
+无
+
+# 参数
+- AwsBucket: 亚马逊存储空间名称。【必选】
+- AwsRegion: 亚马逊存储空间所在的地区。【必选】
+- QiniuBucket: 七牛存储空间名称。【必选】
+
+# 选项
+- -A/--aws-id：亚马逊账户的 Access Key ID。 【必选】
+- -S/--aws-secret-key：亚马逊账户的 Secret Key。 【必选】
+- -p/--prefix：亚马逊存储空间要抓取资源的前缀。 【可选】
+- -n/--max-keys：亚马逊接口每次返回的数据条目数量。 【可选】
+- -m/--continuation-token：亚马逊接口返回的 token（日志中会输出），用于断点列举。 【可选】
+- -c/--thread-count：抓取的线程数, 默认为 20。 【可选】
+- -s/--success-list：指定一个文件的路径，如果资源抓取成功，则将资源信息写入此文件；默认不导出。 【可选】
+- -e/--failure-list：指定一个文件的路径，如果资源抓取失败，则将资源信息写入此文件；默认不导出。 【可选】
+- --enable-record：记录任务执行状态，当下次执行命令时会跳过已执行的任务。 【可选】
+- --record-redo-while-error：依赖于 --enable-record；命令重新执行时，命令中所有任务会从头到尾重新执行；每个任务执行前会根据记录先查看当前任务是否已经执行，如果任务已执行且失败，则再执行一次；默认为 false，当任务执行失败则跳过不再重新执行。 【可选】
+
+
+# 亚马逊存储数据迁移到七牛存储
+使用场景：
+迁移亚马逊存储空间到七牛存储空间。
+
+假如要迁移的亚马逊账户的 Access Key ID, SecretKey 为：
+- AWS_ACCESS_KEY_ID = "12345"
+- AWS_SECRET_KEY = "6789"
+
+亚马逊存储空间名为：
+AWS_BUCKET = "aws-bucket"
+
+亚马逊存储空间所在地区为：
+AWS_REGION = "us-west-2"
+
+七牛存储空间名为：
+QINIU_BUCKET = "qiniu-bucket"
+
+导出失败的文件列表到 "failure.txt"
+
+可以使用如下命令进行迁移：
+```
+$ qshell awsfetch -A 12345 -S 6789 -e failure.txt aws-bucket us-west-2 qiniu-bucket 
+```
