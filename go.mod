@@ -4,7 +4,7 @@ require (
 	github.com/BurntSushi/toml v1.3.2
 	github.com/aliyun/aliyun-oss-go-sdk v2.1.6+incompatible
 	github.com/astaxie/beego v1.12.3
-	github.com/aws/aws-sdk-go v1.37.31
+	github.com/aws/aws-sdk-go v1.55.8
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/fatih/color v1.18.0
 	github.com/mitchellh/go-homedir v1.1.0
